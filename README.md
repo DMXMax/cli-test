@@ -42,6 +42,15 @@ go build -o mythic-cli
 
 ## Usage
 
+Commands can be run directly or from the interactive shell:
+
+```bash
+./mythic-cli game list
+./mythic-cli roll likely 5 "Does the door open?"
+```
+
+For a persistent session with history, use the shell:
+
 ### Starting the Interactive Shell
 
 To begin using the Mythic CLI, start the interactive shell:

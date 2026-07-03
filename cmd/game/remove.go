@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DMXMax/mge/storage"
 	"github.com/DMXMax/mythic-cli/util/db"
 	gdb "github.com/DMXMax/mythic-cli/util/game"
 	"github.com/spf13/cobra"
@@ -31,6 +32,10 @@ var removeCmd = &cobra.Command{
 		if name == "" {
 			return fmt.Errorf("no game name specified")
 		}
+		name = storage.SanitizeGameName(name)
+		if err := storage.ValidateGameName(name); err != nil {
+			return err
+		}
 
 		// Find the game by name
 		var game gdb.Game
@@ -38,15 +43,8 @@ var removeCmd = &cobra.Command{
 			return fmt.Errorf("could not find game '%s': %w", name, err)
 		}
 
-		// Delete associated log entries first
-		res := db.GamesDB.Where("game_id = ?", game.ID).Delete(&gdb.LogEntry{})
-		if res.Error != nil {
-			return fmt.Errorf("failed to delete log entries for '%s': %w", name, res.Error)
-		}
-		logsRemoved := res.RowsAffected
-
-		// Delete the game
-		if err := db.GamesDB.Delete(&game).Error; err != nil {
+		// Permanently delete game and all associated records
+		if err := storage.DeleteGamePermanently(db.GamesDB, game.ID); err != nil {
 			return fmt.Errorf("failed to delete game '%s': %w", name, err)
 		}
 
@@ -55,7 +53,7 @@ var removeCmd = &cobra.Command{
 			gdb.Current = nil
 		}
 
-		cmd.Printf("Removed game: %s (deleted %d log entries)\n", name, logsRemoved)
+		cmd.Printf("Removed game: %s (and all logs, scenes, threads, and characters)\n", name)
 		return nil
 	},
 }

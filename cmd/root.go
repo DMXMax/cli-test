@@ -117,13 +117,21 @@ using the Up/Down arrow keys.`,
 			}
 
 			fields := strings.Fields(input)
-			newCmd, newArgs, err := cmd.Find(fields)
-			if err != nil {
-				cmd.Println(err)
+			var newCmd *cobra.Command
+			var newArgs []string
+			var findErr error
+
+			// Shell-only commands live under shellCmd; everything else on rootCmd.
+			if fields[0] == "quit" || fields[0] == "help" {
+				newCmd, newArgs, findErr = cmd.Find(fields)
+			} else {
+				newCmd, newArgs, findErr = rootCmd.Find(fields)
+			}
+			if findErr != nil {
+				cmd.Println(findErr)
 				continue
 			}
-			// If Find returns the same command, it means no subcommand was found.
-			if newCmd == cmd {
+			if newCmd == cmd || newCmd == rootCmd {
 				cmd.Printf("Error: unknown command \"%s\" for \"%s\"\n", fields[0], cmd.CommandPath())
 				continue
 			}
@@ -141,31 +149,18 @@ using the Up/Down arrow keys.`,
 			}
 
 			if hasHelp {
-				// Show help for the command
 				newCmd.Help()
 			} else {
-				// Set the args for the command and execute it normally
+				newCmd.SetOut(cmd.OutOrStdout())
+				newCmd.SetErr(cmd.ErrOrStderr())
 				newCmd.SetArgs(newArgs)
-
-				// Parse flags to ensure default values are set
-				if err := newCmd.Flags().Parse(newArgs); err != nil {
-					cmd.Println(err)
-					continue
-				}
-
-				if newCmd.RunE != nil {
-					// After parsing, the non-flag arguments are available via Flags().Args()
-					if err := newCmd.RunE(newCmd, newCmd.Flags().Args()); err != nil {
-						if errors.Is(err, errQuit) {
-							return nil // Gracefully exit the shell loop
-						}
-						cmd.Println(err) // Print other errors
+				if err := newCmd.Execute(); err != nil {
+					if errors.Is(err, errQuit) {
+						return nil
 					}
-				} else if newCmd.Run != nil {
-					newCmd.Run(newCmd, newCmd.Flags().Args())
+					cmd.Println(err)
 				}
 
-				// Reset flags on the executed command to avoid carry-over in the shell
 				newCmd.Flags().VisitAll(func(f *pflag.Flag) {
 					f.Value.Set(f.DefValue)
 					f.Changed = false
@@ -197,11 +192,16 @@ var shellQuitCmd = &cobra.Command{
 }
 
 func init() {
-	// Register all subcommands for the interactive shell
-	shellCmd.AddCommand(shellQuitCmd, scene.SceneCmd, game.GameCmd,
-		roll.RollCmd, roll.RollFateCmd, gamelog.LogCmd, descriptor.DescriptorCmd, shellHelpCommand)
+	shared := []*cobra.Command{
+		scene.SceneCmd, game.GameCmd, roll.RollCmd, roll.RollFateCmd,
+		gamelog.LogCmd, descriptor.DescriptorCmd,
+	}
+	for _, c := range shared {
+		rootCmd.AddCommand(c)
+	}
 
-	// Add the shell command to the root command
+	shellCmd.AddCommand(shellQuitCmd, shellHelpCommand)
+
 	rootCmd.AddCommand(shellCmd)
 
 	// Root command flags (currently unused, but available for future use)

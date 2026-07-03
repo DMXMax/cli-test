@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/DMXMax/mge/util/plot"
@@ -17,6 +18,10 @@ var plotPointCmd = &cobra.Command{
 	Short:   "Generate a random plot point for the current game",
 	Long:    `Generate a random plot point based on the current game's story themes. Use --verbose to see roll details.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if gdb.Current == nil {
+			return fmt.Errorf("no game selected. Use 'game load <name>' to select one")
+		}
+
 		roll := rand.Intn(100) + 1
 		pickTheme := gdb.Current.StoryThemes.GetRandomTheme() // By default, if no subcommand is given, show help.
 		pp, err := plot.Chart.GetChartEntry(roll, pickTheme)
